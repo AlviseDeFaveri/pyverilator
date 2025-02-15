@@ -7,6 +7,7 @@ import re
 import warnings
 from keyword import iskeyword
 import pyverilator.verilatorcpp as template_cpp
+import argparse
 
 def verilator_name_to_standard_modular_name(verilator_name):
     """Converts a name exposed in Verilator to its standard name.
@@ -344,125 +345,17 @@ def call_process(args, quiet=False):
 
 class PyVerilator:
     """Python wrapper for verilator model.
-
-        Usage:
-            sim = PyVerilator.build('my_verilator_file.v')
-            sim.io.a = 2
-            sim.io.b = 3
-            print('c = ' + sim.io.c)
-
-        By default the object created propagates the signal changes every time the input changes.
-        So a clock cycle will be:
-            sim.clock = 1
-            sim.clock = 0
-
-
-        Alternatively using the dictionary syntax:
-            sim = PyVerilator.build('my_verilator_file.v')
-            sim['a'] = 2
-            sim['b'] = 3
-            print('c = ' + sim['c'])
     """
 
     default_vcd_filename = 'gtkwave.vcd'
 
     @classmethod
-    def build(cls, top_verilog_file, preceding_files='', verilog_path = [],
-            build_dir = 'obj_dir',
-            json_data = None, gen_only = False, quiet=False,
-            command_args=(), verilog_defines=(), args=[], cargs='', 
-            dump_en = True, dump_fst = False, dump_level=0
-        ):
-        """Build an object file from verilog and load it into python.
-
-        Creates a folder build_dir in which it puts all the files necessary to create
-        a model of top_verilog_file using verilator and the C compiler. All the files are created in build_dir.
-
-        If the project is made of more than one verilog file, all the files used by the top_verilog_file will be searched
-        for in the verilog_path list.
-
-        json_data is a payload than can be used to add a json as a string in the object file compiled by verilator.
-
-        This allow to keep the object file a standalone model even when extra information iis useful to describe the
-        model.
-
-        For example a model coming from bluespec will carry the list of rules of the model in this payload.
-
-        gen_only stops the process before compiling the cpp into object.
-
-        ``quiet`` hides the output of Verilator and its Makefiles while generating and compiling the C++ model.
-
-        ``command_args`` is passed to Verilator as its argv.  It can be used to pass arguments to the $test$plusargs and $value$plusargs system tasks.
-
-        ``verilog_defines`` is a list of preprocessor defines; each entry should be a string, and defined macros with value should be specified as "MACRO=value".
-        
-        ``args`` list of arguments passed to verilator commandline. 
-
-        If compilation fails, this function raises a ``subprocess.CalledProcessError``.
-        """
-        # some simple type checking to look for easy errors to make that can be hard to debug
-        if isinstance(verilog_defines, str):
-            raise TypeError('verilog_defines expects a list of strings')
-        if isinstance(command_args, str):
-            raise TypeError('command_args expects a list of strings')
-
-        # get the module name from the verilog file name
-        top_verilog_file_base = os.path.basename(top_verilog_file)
-        verilog_module_name, extension = os.path.splitext(top_verilog_file_base)
-        if extension not in ['.v', '.sv']:
-            raise ValueError('PyVerilator() expects top_verilog_file to be a verilog file ending in .v')
-
-        # prepare the path for the C++ wrapper file
-        if not os.path.exists(build_dir):
-            os.makedirs(build_dir)
-        verilator_cpp_wrapper_path = os.path.join(build_dir, 'pyverilator_wrapper.cpp')
-
-        # call verilator executable to generate the verilator C++ files
-        verilog_path_args = []
-        for verilog_dir in verilog_path:
-            verilog_path_args += ['-y', verilog_dir]
-
-        # Verilator is a perl program that is run as an executable
-        # Old versions of Verilator are interpreted as a perl script by the shell,
-        # while more recent versions are interpreted as a bash script that calls perl on itself
-        which_verilator = shutil.which('verilator')
-        if which_verilator is None:
-            raise Exception("'verilator' executable not found")
-        verilog_defines = ["+define+" + x for x in verilog_defines]
-        cflags = '-fPIC -shared --std=c++11 -DVL_USER_FINISH ' + cargs
-        
-        if dump_en:
-            cflags += ' -DDUMP_LEVEL=%d' % dump_level
-            if dump_fst:
-                cflags += ' -DDUMP_FST'
-
-        vargs = ['-CFLAGS',
-                cflags,
-                '--trace', # tracing (--trace) is required in order to see internal signals
-                '--cc',
-                preceding_files,
-                top_verilog_file,
-                # '--top',
-                # verilog_module_name,
-                '--exe',
-                verilator_cpp_wrapper_path,
-                ]
-
-        if dump_en and dump_fst:
-            vargs += ['--trace-fst'] # allow fst saving that is faster
-
-        verilator_args = ['perl', which_verilator, '-Wno-fatal', '-Mdir', build_dir] \
-                         + args \
-                         + verilog_path_args \
-                         + verilog_defines \
-                         + vargs
-        call_process(verilator_args)
-
-        # get inputs, outputs, and internal signals by parsing the generated verilator output
+    def generate_cpp_wrapper(cls, verilated_header, module_name='top',
+                                output_path='obj_dir', json_data = None):
+        """ Get inputs, outputs, and internal signals by parsing the generated verilator output """
         inputs = []
         outputs = []
         internal_signals = []
-        verilator_h_file = os.path.join(build_dir, 'V' + verilog_module_name + '.h')
 
         def search_for_signal_decl(signal_type, line):
             # looks for VL_IN*, VL_OUT*, or VL_SIG* macros
@@ -471,7 +364,7 @@ class PyVerilator:
                 signal_name = result.group(2)
                 if signal_type == 'SIG':
                     # old verilator syntax VL_SIG
-                    if signal_name.startswith(verilog_module_name) and '[' not in signal_name and int(
+                    if signal_name.startswith(module_name) and '[' not in signal_name and int(
                             result.group(4)) == 0:
                         # this is an internal signal
                         signal_width = int(result.group(3)) - int(result.group(4)) + 1
@@ -496,7 +389,7 @@ class PyVerilator:
                             return (signal_name, signal_width)
             return None
 
-        with open(verilator_h_file) as f:
+        with open(verilated_header) as f:
             for line in f:
                 result = search_for_signal_decl('IN', line)
                 if result:
@@ -509,21 +402,108 @@ class PyVerilator:
                     internal_signals.append(result)
 
         # generate the C++ wrapper file
-        verilator_cpp_wrapper_code = template_cpp.template_cpp(verilog_module_name, inputs, outputs, internal_signals,
+        verilator_cpp_wrapper_code = template_cpp.template_cpp(module_name, inputs, outputs, internal_signals,
                                                                json.dumps(json.dumps(json_data)))
-        with open(verilator_cpp_wrapper_path, 'w') as f:
+        with open(output_path, 'w') as f:
             f.write(verilator_cpp_wrapper_code)
 
-        # if only generating verilator C++ files, stop here
-        if gen_only:
-            return None
+        return output_path
 
-        # call make to build the pyverilator shared object
+
+    @classmethod
+    def verilate(top_path, wrapper_path, build_dir='obj_dir',
+                 verilog_src_path=[], args=[], cargs='', preceding_files='',
+                 dump_en=True, dump_fst=False, dump_level=0):
+        """ Call Verilator to generate an .so of the C++ simulation.
+            Returns the path of the .so.
+
+        ``top_path``      Verilog or SystemVerilog top.
+        ``wrapper_path``  CPP wrapper (normally, autogenerated through generate_cpp_wrapper).
+        ``args``          Passed directly to verilator.
+        ``cargs``         Passed to the compiler when compiling the verilated sim.
+
+        If the project is made of more than one verilog file, all the files
+        used by the ``verilog_top`` will be searched for in the ``verilog_src_path`` list.
+        """
+
+        # Multiple verilog file.
+        verilog_path_args = []
+        for verilog_dir in verilog_src_path:
+            verilog_path_args += ['-y', verilog_dir]
+
+        # Verilator is a perl program that is run as an executable.
+        # Old versions of Verilator are interpreted as a perl script by the shell,
+        # while more recent versions are interpreted as a bash script that calls perl on itself
+        which_verilator = shutil.which('verilator')
+        if which_verilator is None:
+            raise Exception("'verilator' executable not found")
+        verilog_defines = ["+define+" + x for x in verilog_defines]
+
+        # Prepare C flags.
+        cflags = '-fPIC -shared --std=c++11 -DVL_USER_FINISH ' + cargs
+
+        # Enable dumping.
+        if dump_en:
+            cflags += ' -DDUMP_LEVEL=%d' % dump_level
+            if dump_fst:
+                cflags += ' -DDUMP_FST'
+
+        # Prepare Verilator flags.
+        vargs = ['-CFLAGS',
+                cflags,
+                '--trace', # tracing (--trace) is required in order to see internal signals
+                '--cc',
+                preceding_files,
+                top_path,
+                # '--top',
+                # verilog_module_name,
+                '--exe',
+                wrapper_path,
+                ]
+
+        if dump_en and dump_fst:
+            vargs += ['--trace-fst'] # allow fst saving that is faster
+
+        # Run Verilator.
+        verilator_args = ['perl', which_verilator, '-Wno-fatal', '-Mdir', build_dir] \
+                         + args \
+                         + verilog_path_args \
+                         + verilog_defines \
+                         + vargs
+        call_process(verilator_args)
+
+
+    @classmethod
+    def compile(top_path, build_dir='obj_dir'):
+        """ Call `make` to build the pyverilator shared object """
+
+        # Get the module name from the verilog file name.
+        top_verilog_file_base = os.path.basename(top_path)
+        verilog_module_name, extension = os.path.splitext(top_verilog_file_base)
+        if extension not in ['.v', '.sv']:
+            raise ValueError('PyVerilator() expects top_verilog_file to be a verilog file ending in .v')
+
+        # Run make.
         make_args = ['make', '-C', build_dir, '-f', 'V%s.mk' % verilog_module_name,
                      'LDFLAGS=-fPIC -shared']
-        call_process(make_args, quiet=quiet)
-        so_file = os.path.join(build_dir, 'V' + verilog_module_name)
+        call_process(make_args)
+
+        # Return .so.
+        return os.path.join(build_dir, 'V' + verilog_module_name)
+
+
+    @classmethod
+    def build(cls, so_file, command_args=[]):
+        """Load a shared object it into python.
+
+        ``so_file``      Path of the simulation shared object.
+        ``command_args`` Is passed to Verilator as its argv.
+                         It can be used to pass arguments to the $test$plusargs
+                         and $value$plusargs system tasks.
+        """
+
         return cls(so_file, command_args=command_args)
+
 
     def __init__(self, so_file, auto_eval=True, command_args=()):
         # initialize lib and model first so if __init__ fails, __del__ will
