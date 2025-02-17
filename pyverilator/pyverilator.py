@@ -471,7 +471,7 @@ class PyVerilator:
         verilog_defines = ["+define+" + x for x in verilog_defines]
 
         # Prepare C flags.
-        cflags = '-fPIC -shared --std=c++11 -DVL_USER_FINISH ' + cargs
+        cflags = '-fPIC -shared -DVL_USER_FINISH ' + cargs
 
         # Enable dumping.
         if dump_en:
