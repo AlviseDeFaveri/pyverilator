@@ -9,6 +9,7 @@ from keyword import iskeyword
 import pyverilator.verilatorcpp as template_cpp
 import argparse
 
+
 def verilator_name_to_standard_modular_name(verilator_name):
     """Converts a name exposed in Verilator to its standard name.
 
@@ -37,7 +38,8 @@ def verilator_name_to_standard_modular_name(verilator_name):
     They can be replaced with ''."""
 
     if '__BRA__' in verilator_name or '__KET__' in verilator_name:
-        raise NotImplementedError('__BRA__ and __KET__ are not currently supported')
+        raise NotImplementedError(
+            '__BRA__ and __KET__ are not currently supported')
 
     modular_verilator_name = verilator_name.split('__DOT__')
     if len(modular_verilator_name) > 1:
@@ -54,9 +56,11 @@ def verilator_name_to_standard_modular_name(verilator_name):
                 final_name_segment += split_at_escape_char[i]
             else:
                 escaped_char = chr(int(split_at_escape_char[i][0:2], 16))
-                final_name_segment += escaped_char + split_at_escape_char[i][2:]
+                final_name_segment += escaped_char + \
+                    split_at_escape_char[i][2:]
         final_modular_name.append(final_name_segment)
     return tuple(final_modular_name)
+
 
 class Collection:
     """Dictionary-like container for storing Signals and other Collections for PyVerilator.
@@ -85,7 +89,7 @@ class Collection:
     """
 
     @classmethod
-    def build_collection_recursive(cls, nested_dict, nested_class = None):
+    def build_collection_recursive(cls, nested_dict, nested_class=None):
         """Builds nested Collection from a nested dict.
 
         The outer Collection is 'cls', all the inner collections are 'nested_class'
@@ -95,11 +99,12 @@ class Collection:
             nested_class = cls
         for key in modified_dict:
             if isinstance(modified_dict[key], dict):
-                modified_dict[key] = nested_class.build_collection_recursive(modified_dict[key])
+                modified_dict[key] = nested_class.build_collection_recursive(
+                    modified_dict[key])
         return cls(modified_dict)
 
     @classmethod
-    def build_nested_collection(cls, flat_tuple_dict, nested_class = None):
+    def build_nested_collection(cls, flat_tuple_dict, nested_class=None):
         """Builds nested Collections from a dict with tuple keys.
 
         The keys of the tuple corresponds to the hierarchical path of the value
@@ -112,7 +117,7 @@ class Collection:
                     curr_item[elem] = {}
                 curr_item = curr_item[elem]
             curr_item[hierarchy_path[-1]] = value
-        return cls.build_collection_recursive(nested_dict, nested_class = nested_class)
+        return cls.build_collection_recursive(nested_dict, nested_class=nested_class)
 
     def __init__(self, items):
         self._item_dict = items.copy()
@@ -142,7 +147,8 @@ class Collection:
                 # if that fails, just return the object
                 return obj
         else:
-            raise AttributeError(f"'Collection' object has no attribute '{name}'")
+            raise AttributeError(
+                f"'Collection' object has no attribute '{name}'")
 
     def __getitem__(self, name):
         obj = self._item_dict.get(name)
@@ -202,7 +208,8 @@ class Collection:
         truncated = num_items > 25
         if truncated:
             keys_to_show = [self._item_dict_keys[i] for i in range(10)]
-            keys_to_show.extend([self._item_dict_keys[i] for i in range(num_items-10, num_items)])
+            keys_to_show.extend([self._item_dict_keys[i]
+                                for i in range(num_items-10, num_items)])
         else:
             keys_to_show = [self._item_dict_keys[i] for i in range(num_items)]
         items_to_show = [self._item_dict[key] for key in keys_to_show]
@@ -211,7 +218,8 @@ class Collection:
         column_three = []
         for item in items_to_show:
             if isinstance(item, Collection):
-                column_three.append('{} items'.format(len(item._item_dict_keys)))
+                column_three.append('{} items'.format(
+                    len(item._item_dict_keys)))
             elif isinstance(item, str):
                 column_three.append(f'"{item}"')
             else:
@@ -230,23 +238,30 @@ class Collection:
                 ret += '\n'
             if truncated and i == 10:
                 ret += '    ... %d objects in total ...\n' % num_items
-            fmt_string = '{:<' + str(column_one_width) + '}  {:<' + str(column_two_width) + '}  {:>' + str(column_three_width) + '}'
-            ret += fmt_string.format(column_one[i], column_two[i], column_three[i])
+            fmt_string = '{:<' + str(column_one_width) + '}  {:<' + str(
+                column_two_width) + '}  {:>' + str(column_three_width) + '}'
+            ret += fmt_string.format(column_one[i],
+                                     column_two[i], column_three[i])
         return ret
+
 
 class Signal:
     def __init__(self, pyverilator_sim, verilator_name, width):
         self.sim_object = pyverilator_sim
         self.verilator_name = verilator_name
-        self.modular_name = verilator_name_to_standard_modular_name(verilator_name)
+        self.modular_name = verilator_name_to_standard_modular_name(
+            verilator_name)
         self.width = width
         # get the function and arguments required for getting the signal's value
         if width <= 32:
-            self.value_function_and_args = (self.sim_object._read_32, self.verilator_name)
+            self.value_function_and_args = (
+                self.sim_object._read_32, self.verilator_name)
         elif width <= 64:
-            self.value_function_and_args = (self.sim_object._read_64, self.verilator_name)
+            self.value_function_and_args = (
+                self.sim_object._read_64, self.verilator_name)
         else:
-            self.value_function_and_args = (self.sim_object._read_words, self.verilator_name, (width + 31) // 32)
+            self.value_function_and_args = (
+                self.sim_object._read_words, self.verilator_name, (width + 31) // 32)
 
     @property
     def value(self):
@@ -272,6 +287,7 @@ class Signal:
         short_name = self.modular_name[-1]
         return '{} = {}'.format(short_name, self.status)
 
+
 class SignalValue(int):
     """Holds specific value from reading a signal.
 
@@ -283,7 +299,7 @@ class SignalValue(int):
         sim.io.output.signal
     """
 
-    def __new__(cls, signal, value = None):
+    def __new__(cls, signal, value=None):
         if value is None:
             value = signal.value
         ret = super().__new__(cls, value)
@@ -299,30 +315,40 @@ class SignalValue(int):
         return hex_string
 
 # These classes help improve python error messages
+
+
 class Submodule(Collection):
     pass
+
 
 class Output(Signal):
     pass
 
+
 class InternalSignal(Signal):
     pass
+
 
 class Input(Signal):
     def __init__(self, pyverilator_sim, verilator_name, width):
         super().__init__(pyverilator_sim, verilator_name, width)
         if width <= 32:
-            self.write_function_and_args = (self.sim_object._write_32, self.verilator_name)
+            self.write_function_and_args = (
+                self.sim_object._write_32, self.verilator_name)
         elif width <= 64:
-            self.write_function_and_args = (self.sim_object._write_64, self.verilator_name)
+            self.write_function_and_args = (
+                self.sim_object._write_64, self.verilator_name)
         else:
-            self.write_function_and_args = (self.sim_object._write_words, self.verilator_name, (width + 31) // 32)
+            self.write_function_and_args = (
+                self.sim_object._write_words, self.verilator_name, (width + 31) // 32)
 
     def write(self, value):
-        self.write_function_and_args[0](*self.write_function_and_args[1:], value)
+        self.write_function_and_args[0](
+            *self.write_function_and_args[1:], value)
 
     def collection_set(self, value):
         self.write(value)
+
 
 class Clock(Input):
     def __init__(self, input_):
@@ -336,12 +362,14 @@ class Clock(Input):
         self.write(1)
         self.write(0)
 
+
 def call_process(args, quiet=False):
     if quiet:
         subprocess.run(args, stderr=subprocess.PIPE,
                        stdout=subprocess.PIPE, check=True)
     else:
         subprocess.check_call(args)
+
 
 class PyVerilator:
     """Python wrapper for verilator model.
@@ -351,7 +379,7 @@ class PyVerilator:
 
     @classmethod
     def generate_cpp_wrapper(cls, verilated_header, module_name='top',
-                                output_path='obj_dir', json_data = None):
+                             output_path='obj_dir', json_data=None):
         """ Get inputs, outputs, and internal signals by parsing the generated verilator output """
         inputs = []
         outputs = []
@@ -359,7 +387,8 @@ class PyVerilator:
 
         def search_for_signal_decl(signal_type, line):
             # looks for VL_IN*, VL_OUT*, or VL_SIG* macros
-            result = re.search('(VL_' + signal_type + r'[^(]*)\(&?([^,]+),([0-9]+),([0-9]+)(?:,[0-9]+)?\);', line)
+            result = re.search(
+                '(VL_' + signal_type + r'[^(]*)\(&?([^,]+),([0-9]+),([0-9]+)(?:,[0-9]+)?\);', line)
             if result:
                 signal_name = result.group(2)
                 if signal_type == 'SIG':
@@ -367,23 +396,26 @@ class PyVerilator:
                     if signal_name.startswith(module_name) and '[' not in signal_name and int(
                             result.group(4)) == 0:
                         # this is an internal signal
-                        signal_width = int(result.group(3)) - int(result.group(4)) + 1
+                        signal_width = int(result.group(3)) - \
+                            int(result.group(4)) + 1
                         return (signal_name, signal_width)
                     else:
                         return None
                 else:
                     # this is an input or an output
-                    signal_width = int(result.group(3)) - int(result.group(4)) + 1
+                    signal_width = int(result.group(3)) - \
+                        int(result.group(4)) + 1
                     return (signal_name, signal_width)
             else:
                 # internal signals are now in the following form, that includes the hierarchy
                 # CData/*0:0*/ ecdsa256_wrapper__DOT__ecdsa256_inst__DOT__next_dly;
                 if False and signal_type == 'SIG' and 'IData' in line:
                     parts = line.split('__DOT__')
-                    if len(parts)==2:
+                    if len(parts) == 2:
                         # this is a top-level internal signal
                         signal_name = parts[1].strip(' ;\n')
-                        print(f'###################### signal_name <{signal_name}>')
+                        print(
+                            f'###################### signal_name <{signal_name}>')
                         if not '[' in signal_name:
                             signal_width = 1
                             return (signal_name, signal_width)
@@ -409,10 +441,9 @@ class PyVerilator:
 
         return output_path
 
-
     @classmethod
-    def verilate(top_path, wrapper_path, build_dir='obj_dir',
-                 verilog_src_path=[], args=[], cargs='', preceding_files='',
+    def verilate(cls, top_path, wrapper_path, build_dir='obj_dir',
+                 verilog_src_path=[], verilog_defines=[], args=[], cargs='', preceding_files='',
                  dump_en=True, dump_fst=False, dump_level=0):
         """ Call Verilator to generate an .so of the C++ simulation.
             Returns the path of the .so.
@@ -450,28 +481,28 @@ class PyVerilator:
 
         # Prepare Verilator flags.
         vargs = ['-CFLAGS',
-                cflags,
-                '--trace', # tracing (--trace) is required in order to see internal signals
-                '--cc',
-                preceding_files,
-                top_path,
-                # '--top',
-                # verilog_module_name,
-                '--exe',
-                wrapper_path,
-                ]
+                 cflags,
+                 # tracing (--trace) is required in order to see internal signals
+                 '--trace',
+                 '--cc',
+                 preceding_files,
+                 top_path,
+                 # '--top',
+                 # verilog_module_name,
+                 '--exe',
+                 wrapper_path,
+                 ]
 
         if dump_en and dump_fst:
-            vargs += ['--trace-fst'] # allow fst saving that is faster
+            vargs += ['--trace-fst']  # allow fst saving that is faster
 
         # Run Verilator.
         verilator_args = ['perl', which_verilator, '-Wno-fatal', '-Mdir', build_dir] \
-                         + args \
-                         + verilog_path_args \
-                         + verilog_defines \
-                         + vargs
+            + args \
+            + verilog_path_args \
+            + verilog_defines \
+            + vargs
         call_process(verilator_args)
-
 
     @classmethod
     def compile(top_path, build_dir='obj_dir'):
@@ -479,9 +510,11 @@ class PyVerilator:
 
         # Get the module name from the verilog file name.
         top_verilog_file_base = os.path.basename(top_path)
-        verilog_module_name, extension = os.path.splitext(top_verilog_file_base)
+        verilog_module_name, extension = os.path.splitext(
+            top_verilog_file_base)
         if extension not in ['.v', '.sv']:
-            raise ValueError('PyVerilator() expects top_verilog_file to be a verilog file ending in .v')
+            raise ValueError(
+                'PyVerilator() expects top_verilog_file to be a verilog file ending in .v')
 
         # Run make.
         make_args = ['make', '-C', build_dir, '-f', 'V%s.mk' % verilog_module_name,
@@ -491,9 +524,8 @@ class PyVerilator:
         # Return .so.
         return os.path.join(build_dir, 'V' + verilog_module_name)
 
-
     @classmethod
-    def build(cls, so_file, command_args=[]):
+    def load_so(cls, so_file, command_args=[]):
         """Load a shared object it into python.
 
         ``so_file``      Path of the simulation shared object.
@@ -503,7 +535,6 @@ class PyVerilator:
         """
 
         return cls(so_file, command_args=command_args)
-
 
     def __init__(self, so_file, auto_eval=True, command_args=()):
         # initialize lib and model first so if __init__ fails, __del__ will
@@ -559,34 +590,48 @@ class PyVerilator:
             del self.lib
 
     def _read_embedded_data(self):
-        self.module_name = ctypes.c_char_p.in_dll(self.lib, '_pyverilator_module_name').value.decode('ascii')
+        self.module_name = ctypes.c_char_p.in_dll(
+            self.lib, '_pyverilator_module_name').value.decode('ascii')
 
         # inputs
-        num_inputs = ctypes.c_uint32.in_dll(self.lib, '_pyverilator_num_inputs').value
-        input_names = (ctypes.c_char_p * num_inputs).in_dll(self.lib, '_pyverilator_inputs')
-        input_widths = (ctypes.c_uint32 * num_inputs).in_dll(self.lib, '_pyverilator_input_widths')
+        num_inputs = ctypes.c_uint32.in_dll(
+            self.lib, '_pyverilator_num_inputs').value
+        input_names = (ctypes.c_char_p *
+                       num_inputs).in_dll(self.lib, '_pyverilator_inputs')
+        input_widths = (
+            ctypes.c_uint32 * num_inputs).in_dll(self.lib, '_pyverilator_input_widths')
         self.inputs = []
         for i in range(num_inputs):
-            self.inputs.append((input_names[i].decode('ascii'), input_widths[i]))
+            self.inputs.append(
+                (input_names[i].decode('ascii'), input_widths[i]))
 
         # outputs
-        num_outputs = ctypes.c_uint32.in_dll(self.lib, '_pyverilator_num_outputs').value
-        output_names = (ctypes.c_char_p * num_outputs).in_dll(self.lib, '_pyverilator_outputs')
-        output_widths = (ctypes.c_uint32 * num_outputs).in_dll(self.lib, '_pyverilator_output_widths')
+        num_outputs = ctypes.c_uint32.in_dll(
+            self.lib, '_pyverilator_num_outputs').value
+        output_names = (ctypes.c_char_p *
+                        num_outputs).in_dll(self.lib, '_pyverilator_outputs')
+        output_widths = (
+            ctypes.c_uint32 * num_outputs).in_dll(self.lib, '_pyverilator_output_widths')
         self.outputs = []
         for i in range(num_outputs):
-            self.outputs.append((output_names[i].decode('ascii'), output_widths[i]))
+            self.outputs.append(
+                (output_names[i].decode('ascii'), output_widths[i]))
 
         # internal signals
-        num_internal_signals = ctypes.c_uint32.in_dll(self.lib, '_pyverilator_num_internal_signals').value
-        internal_signal_names = (ctypes.c_char_p * num_internal_signals).in_dll(self.lib, '_pyverilator_internal_signals')
-        internal_signal_widths = (ctypes.c_uint32 * num_internal_signals).in_dll(self.lib, '_pyverilator_internal_signal_widths')
+        num_internal_signals = ctypes.c_uint32.in_dll(
+            self.lib, '_pyverilator_num_internal_signals').value
+        internal_signal_names = (
+            ctypes.c_char_p * num_internal_signals).in_dll(self.lib, '_pyverilator_internal_signals')
+        internal_signal_widths = (ctypes.c_uint32 * num_internal_signals).in_dll(
+            self.lib, '_pyverilator_internal_signal_widths')
         self.internal_signals = []
         for i in range(num_internal_signals):
-            self.internal_signals.append((internal_signal_names[i].decode('ascii'), internal_signal_widths[i]))
+            self.internal_signals.append(
+                (internal_signal_names[i].decode('ascii'), internal_signal_widths[i]))
 
         # json_data
-        json_string = ctypes.c_char_p.in_dll(self.lib, '_pyverilator_json_data').value.decode('ascii')
+        json_string = ctypes.c_char_p.in_dll(
+            self.lib, '_pyverilator_json_data').value.decode('ascii')
         self.json_data = json.loads(json_string)
 
     def _populate_signal_collections(self):
@@ -606,7 +651,8 @@ class PyVerilator:
             internals_dict[sig.modular_name] = sig
             all_signals[sig.modular_name] = sig
         self.io = Collection(io_dict)
-        self.internals = Collection.build_nested_collection(internals_dict, Submodule)
+        self.internals = Collection.build_nested_collection(
+            internals_dict, Submodule)
         self.all_signals = all_signals
 
     def _read(self, port_name):
@@ -615,7 +661,8 @@ class PyVerilator:
             if port_name == name:
                 port_width = width
         if port_width is None:
-            raise ValueError(f'cannot read port "{port_name}" because it does not exist')
+            raise ValueError(
+                f'cannot read port "{port_name}" because it does not exist')
         if port_width > 64:
             num_words = (port_width + 31) // 32
             return self._read_words(port_name, num_words)
@@ -654,7 +701,8 @@ class PyVerilator:
             if port_name == name:
                 port_width = width
         if port_width is None:
-            raise ValueError(f'cannot write port "{port_name}" because it does not exist (or it is an output)')
+            raise ValueError(
+                f'cannot write port "{port_name}" because it does not exist (or it is an output)')
         if port_width > 64:
             num_words = (port_width + 31) // 32
             self._write_words(port_name, num_words, value)
@@ -666,13 +714,13 @@ class PyVerilator:
     def _write_32(self, port_name, value):
         fn = getattr(self.lib, 'set_' + port_name)
         fn.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
-        fn( self.model, ctypes.c_uint32(value) )
+        fn(self.model, ctypes.c_uint32(value))
         self._post_write_hook(port_name, value)
 
     def _write_64(self, port_name, value):
         fn = getattr(self.lib, 'set_' + port_name)
         fn.argtypes = [ctypes.c_void_p, ctypes.c_uint64]
-        fn( self.model, ctypes.c_uint64(value) )
+        fn(self.model, ctypes.c_uint64(value))
         self._post_write_hook(port_name, value)
 
     def _write_words(self, port_name, num_words, value):
@@ -680,7 +728,7 @@ class PyVerilator:
         fn.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint32]
         for i in range(num_words):
             word = ctypes.c_uint32(value >> (i * 32))
-            fn( self.model, i, word )
+            fn(self.model, i, word)
         self._post_write_hook(port_name, value)
 
     def _post_write_hook(self, port_name, value):
@@ -717,8 +765,10 @@ class PyVerilator:
         return self.lib.set_finished(b)
 
     def set_vl_finish_callback(self, cb):
-        ctype_cb = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p)
-        self._lib_vl_finish_callback = ctype_cb(lambda *args: cb(self, *args)) if cb else None
+        ctype_cb = ctypes.CFUNCTYPE(
+            None, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p)
+        self._lib_vl_finish_callback = ctype_cb(
+            lambda *args: cb(self, *args)) if cb else None
         return self.lib.set_vl_finish_callback(self._lib_vl_finish_callback)
 
     def eval(self):
@@ -728,13 +778,15 @@ class PyVerilator:
         if self.auto_tracing_mode == 'eval':
             self.add_to_vcd_trace()
 
-    def start_vcd_trace(self, filename, auto_tracing = True):
+    def start_vcd_trace(self, filename, auto_tracing=True):
         if self.vcd_trace is not None:
-            raise ValueError('start_vcd_trace() called while VCD tracing is already active')
+            raise ValueError(
+                'start_vcd_trace() called while VCD tracing is already active')
         start_vcd_trace = self.lib.start_vcd_trace
         start_vcd_trace.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
         start_vcd_trace.restype = ctypes.c_void_p
-        self.vcd_trace = start_vcd_trace(self.model, ctypes.c_char_p(filename.encode('ascii')))
+        self.vcd_trace = start_vcd_trace(
+            self.model, ctypes.c_char_p(filename.encode('ascii')))
         self.vcd_filename = filename
 
         if not auto_tracing:
@@ -790,20 +842,24 @@ class PyVerilator:
             new_max_time = float(self.gtkwave_tcl.eval('gtkwave::getMaxTime'))
             if new_max_time > old_max_time:
                 # if it changed, see if the window could previously see the last data but not anymore
-                window_end_time = float(self.gtkwave_tcl.eval('gtkwave::getWindowEndTime'))
+                window_end_time = float(
+                    self.gtkwave_tcl.eval('gtkwave::getWindowEndTime'))
                 if window_end_time >= old_max_time and window_end_time < new_max_time:
                     # if so, shift the window start so the new data is shown
                     time_shift_amt = new_max_time - window_end_time
-                    window_start_time = float(self.gtkwave_tcl.eval('gtkwave::getWindowStartTime'))
-                    self.gtkwave_tcl.eval('gtkwave::setWindowStartTime %d' % (window_start_time + time_shift_amt))
+                    window_start_time = float(
+                        self.gtkwave_tcl.eval('gtkwave::getWindowStartTime'))
+                    self.gtkwave_tcl.eval('gtkwave::setWindowStartTime %d' % (
+                        window_start_time + time_shift_amt))
 
     def start_gtkwave(self):
-        import tclwrapper # tclwrapper requires tkinter, which does not work on WSL
+        import tclwrapper  # tclwrapper requires tkinter, which does not work on WSL
         if self.vcd_filename is None:
             self.start_vcd_trace(PyVerilator.default_vcd_filename)
         # in preparation for using tclwrapper with gtkwave, add a warning filter
         # to ignore expected messages written to stderr for certain commands
-        warnings.filterwarnings('ignore', r".*generated stderr message '\[[0-9]*\] start time.\\n\[[0-9]*\] end time.\\n'")
+        warnings.filterwarnings(
+            'ignore', r".*generated stderr message '\[[0-9]*\] start time.\\n\[[0-9]*\] end time.\\n'")
         self.gtkwave_active = True
         self.gtkwave_tcl = tclwrapper.TCLWrapper('gtkwave', '-W')
         self.gtkwave_tcl.start()
@@ -831,12 +887,15 @@ class PyVerilator:
 
     def send_signal_to_gtkwave(self, sig):
         if not self.gtkwave_active:
-            raise ValueError('send_signals_to_gtkwave() requires GTKWave to be started using start_gtkwave()')
+            raise ValueError(
+                'send_signals_to_gtkwave() requires GTKWave to be started using start_gtkwave()')
 
         if not isinstance(sig, Signal):
-            raise TypeError('send_signal_to_gtkwave() only works on Signal objects. Use send_to_gtkwave() for other items.')
+            raise TypeError(
+                'send_signal_to_gtkwave() only works on Signal objects. Use send_to_gtkwave() for other items.')
 
-        gtkwave_name = 'TOP.{}.'.format(self.module_name) + '.'.join(sig.modular_name)
+        gtkwave_name = 'TOP.{}.'.format(
+            self.module_name) + '.'.join(sig.modular_name)
         if sig.width > 1:
             gtkwave_name += '[%d:0]' % (sig.width-1)
 
@@ -855,11 +914,13 @@ class PyVerilator:
         ''' % gtkwave_name))
 
         if num_found_signals < 1:
-            raise ValueError('send_signal_to_gtkwave was not able to send ' + gtkwave_name)
+            raise ValueError(
+                'send_signal_to_gtkwave was not able to send ' + gtkwave_name)
 
     def stop_gtkwave(self):
         if not self.gtkwave_active:
-            raise ValueError('stop_gtkwave() requires GTKWave to be started using start_gtkwave()')
+            raise ValueError(
+                'stop_gtkwave() requires GTKWave to be started using start_gtkwave()')
         self.gtkwave_tcl.stop()
         self.gtkwave_active = False
         if self.vcd_filename == PyVerilator.default_vcd_filename:
