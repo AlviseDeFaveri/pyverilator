@@ -379,7 +379,7 @@ class PyVerilator:
 
     @classmethod
     def generate_cpp_wrapper(cls, verilated_header, module_name='top',
-                             output_path='obj_dir', json_data=None):
+                             output_path='obj_dir/pyverilator_wrapper.cpp', json_data=None):
         """ Get inputs, outputs, and internal signals by parsing the generated verilator output """
         inputs = []
         outputs = []
@@ -505,7 +505,7 @@ class PyVerilator:
         call_process(verilator_args)
 
     @classmethod
-    def compile(top_path, build_dir='obj_dir'):
+    def compile(cls, top_path, build_dir='obj_dir'):
         """ Call `make` to build the pyverilator shared object """
 
         # Get the module name from the verilog file name.
@@ -525,7 +525,7 @@ class PyVerilator:
         return os.path.join(build_dir, 'V' + verilog_module_name)
 
     @classmethod
-    def load_so(cls, so_file, command_args=[]):
+    def load_so(cls, so_file, command_args=()):
         """Load a shared object it into python.
 
         ``so_file``      Path of the simulation shared object.
@@ -535,6 +535,67 @@ class PyVerilator:
         """
 
         return cls(so_file, command_args=command_args)
+
+    @classmethod
+    def build(cls, top_path, preceding_files='', verilog_src_path = [],
+            build_dir = 'obj_dir',
+            json_data = None, gen_only = False, quiet=False,
+            command_args=(), verilog_defines=(), args=[], cargs='',
+            dump_en = True, dump_fst = False, dump_level=0
+        ):
+        """Build an object file from verilog and load it into python.
+
+        Creates a folder build_dir in which it puts all the files necessary to create
+        a model of top_path using verilator and the C compiler. All the files are created in build_dir.
+
+        If the project is made of more than one verilog file, all the files used by the top_path will be searched
+        for in the verilog_path list.
+
+        json_data is a payload than can be used to add a json as a string in the object file compiled by verilator.
+
+        This allow to keep the object file a standalone model even when extra information iis useful to describe the
+        model.
+
+        For example a model coming from bluespec will carry the list of rules of the model in this payload.
+
+        gen_only stops the process before compiling the cpp into object.
+
+        ``quiet`` hides the output of Verilator and its Makefiles while generating and compiling the C++ model.
+
+        ``command_args`` is passed to Verilator as its argv.  It can be used to pass arguments to the $test$plusargs and $value$plusargs system tasks.
+
+        ``verilog_defines`` is a list of preprocessor defines; each entry should be a string, and defined macros with value should be specified as "MACRO=value".
+
+        ``args`` list of arguments passed to verilator commandline.
+
+        If compilation fails, this function raises a ``subprocess.CalledProcessError``.
+        """
+        # prepare the path for the C++ wrapper file
+        if not os.path.exists(build_dir):
+            os.makedirs(build_dir)
+        verilator_cpp_wrapper_path = os.path.join(build_dir, 'pyverilator_wrapper.cpp')
+
+        # 1. Transpile to C++.
+        cls.verilate(top_path, verilator_cpp_wrapper_path, build_dir,
+                 verilog_src_path, verilog_defines, args, cargs, preceding_files,
+                 dump_en, dump_fst, dump_level)
+
+        # 2. Generate wrapper.
+        top_verilog_file_base = os.path.basename(top_path)
+        module_name, extension = os.path.splitext(top_verilog_file_base)
+        if extension not in ['.v', '.sv']:
+            raise ValueError('PyVerilator() expects top_path to be a verilog file ending in .v')
+
+        verilated_header = os.path.join(build_dir, 'V' + module_name + '.h')
+        cls.generate_cpp_wrapper(verilated_header, module_name,
+                             verilator_cpp_wrapper_path, json_data)
+
+        # 3. Compile simulation.
+        sim = cls.compile(top_path, build_dir)
+
+        # 4. Load sim as object.
+        return cls.load_so(sim, command_args)
+
 
     def __init__(self, so_file, auto_eval=True, command_args=()):
         # initialize lib and model first so if __init__ fails, __del__ will
